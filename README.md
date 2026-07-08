@@ -1,37 +1,45 @@
 # Favs Panel
 
-Un gestor de favoritos para Chrome con estilo iOS/iCloud: reemplaza el popup nativo por un panel completo, con tus favoritos agrupados por carpeta, búsqueda instantánea y todos los metadatos a la vista.
+A bookmarks manager for Chrome with an iOS/iCloud-inspired design: it replaces the native popup with a full panel — bookmarks grouped by folder, instant search, and every detail at a glance.
 
 ![Favs Panel](docs/screenshot.png)
 
-## ✨ Características
+## ✨ Features
 
-- **Organización por secciones** — los favoritos se agrupan automáticamente por carpeta (y subcarpeta), no una lista plana interminable.
-- **Árbol de carpetas** en la barra lateral, con conteo de favoritos por carpeta.
-- **Búsqueda instantánea** por título o URL (atajo `/`).
-- **Ordenamiento** por fecha, alfabético o por dominio.
-- **Vista compacta** para ver más favoritos en pantalla.
-- **Acciones rápidas**: abrir, copiar URL o eliminar sin salir del panel.
-- **Diseño estilo iOS/iCloud** — tipografía del sistema, vidrio esmerilado, grouped lists y acento azul.
-- 100% local: usa la API de `chrome.bookmarks`, no se envían datos a ningún servidor.
+- **Sectioned by folder** — bookmarks are automatically grouped by folder (and subfolder), not one endless flat list.
+- **List and grid view** — switch to a grid of large, clickable icon cards, launcher-style.
+- **Folder tree** in the sidebar, with a bookmark count per folder.
+- **Instant search** by title or URL (shortcut: `/`).
+- **Sort** by date, alphabetically, or by domain.
+- **Create bookmarks** directly from the panel — title, URL, and target folder.
+- **Compact view** to fit more bookmarks on screen.
+- **Quick actions**: open, copy URL, or delete without leaving the panel.
+- **Light and dark mode**, following your system preference or a manual toggle.
+- **English and Spanish**, switchable anytime (English by default).
+- **iOS/iCloud-style design** — system typography, frosted glass, grouped lists, and a blue accent.
+- 100% local: uses the `chrome.bookmarks` API, no data is ever sent anywhere.
 
-## 🚀 Instalación
+## 🚀 Installation
 
-Todavía no está publicada en la Chrome Web Store. Para probarla:
+Not yet published on the Chrome Web Store. To try it:
 
-1. Cloná este repo o descargalo como ZIP.
-2. Abrí `chrome://extensions` en Chrome (o cualquier navegador basado en Chromium).
-3. Activá el **Modo desarrollador** (arriba a la derecha).
-4. Hacé clic en **Cargar descomprimida** y seleccioná esta carpeta.
-5. Abrí el panel con el ícono de la extensión o con el atajo `Alt+B`.
+1. Clone this repo or download it as a ZIP.
+2. Open `chrome://extensions` in Chrome (or any Chromium-based browser).
+3. Enable **Developer mode** (top right).
+4. Click **Load unpacked** and select this folder.
+5. Open the panel from the extension icon or the `Alt+B` shortcut.
 
 ## 🛠️ Stack
 
-Vanilla JS + HTML + CSS, sin frameworks ni build step. Manifest V3.
+Vanilla JS + HTML + CSS, no frameworks, no build step. Manifest V3.
 
-## 📄 Permisos
+## 📄 Permissions
 
-- `bookmarks` — leer y gestionar tus favoritos.
-- `favicon` — mostrar el ícono de cada sitio.
+- `bookmarks` — read and manage your bookmarks.
+- `favicon` — display each site's icon.
 
-Ningún dato sale de tu navegador.
+No data ever leaves your browser.
+
+## ☕ Support
+
+If this is useful to you, you can [buy me a coffee](https://cafecito.app/francososa13).
