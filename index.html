@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Favs Panel</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7.5 18a4.5 4.5 0 0 1-.38-8.98 5.5 5.5 0 0 1 10.6-2.19A4.25 4.25 0 0 1 17.25 15v.05A3.75 3.75 0 0 1 17 18H7.5z"/></svg>
+        </span>
+        <div>
+          <h1>Favs Panel</h1>
+          <p id="global-stats" class="brand-sub">cargando…</p>
+        </div>
+      </div>
+
+      <nav id="folder-tree" class="tree" aria-label="Carpetas de favoritos"></nav>
+    </aside>
+
+    <main class="main">
+      <header class="toolbar">
+        <div class="search-wrap">
+          <svg class="search-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+            <circle cx="9" cy="9" r="5.5"/><path d="M17 17l-3.5-3.5"/>
+          </svg>
+          <input
+            id="search"
+            type="search"
+            placeholder="Buscar por título o URL…  ( / )"
+            autocomplete="off"
+            spellcheck="false"
+          />
+        </div>
+
+        <div class="toolbar-right">
+          <select id="sort" aria-label="Ordenar">
+            <option value="recent">Más recientes</option>
+            <option value="oldest">Más antiguos</option>
+            <option value="az">A → Z</option>
+            <option value="za">Z → A</option>
+            <option value="domain">Por dominio</option>
+          </select>
+          <button id="toggle-view" class="btn-ghost" title="Cambiar densidad" aria-label="Cambiar densidad">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h8"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <div class="context-bar">
+        <span id="context-path" class="context-path">Todos los favoritos</span>
+        <span id="context-count" class="context-count"></span>
+      </div>
+
+      <section id="list" class="list" aria-live="polite"></section>
+
+      <div id="empty" class="empty" hidden>
+        <p>Nada por acá.</p>
+        <p class="empty-sub">Probá con otra búsqueda u otra carpeta.</p>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
