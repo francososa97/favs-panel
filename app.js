@@ -257,8 +257,8 @@ function renderTree(tree) {
       }
 
       btn.addEventListener("click", (e) => {
-        // click en la flecha = expandir/colapsar; click en el resto = seleccionar
-        if (hasSub && e.target.classList.contains("tw")) {
+        // click en la flecha (o en el ícono SVG que contiene) = expandir/colapsar; click en el resto = seleccionar
+        if (hasSub && e.target.closest(".tw")) {
           btn.classList.toggle("expanded");
           childBox.classList.toggle("open");
           return;
