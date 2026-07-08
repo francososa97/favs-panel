@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Favs Panel</title>
   <link rel="stylesheet" href="styles.css" />
+  <script>
+    // Aplica el tema guardado antes del primer paint para evitar parpadeo.
+    document.documentElement.setAttribute("data-theme", localStorage.getItem("favs-theme") || "auto");
+  </script>
 </head>
 <body>
   <div class="app">
@@ -21,6 +25,20 @@
       </div>
 
       <nav id="folder-tree" class="tree" aria-label="Carpetas de favoritos"></nav>
+
+      <div class="sidebar-footer">
+        <button id="theme-toggle" class="theme-toggle" title="Cambiar a modo oscuro" aria-label="Cambiar a modo oscuro" aria-pressed="false">
+          <svg class="icon-moon" viewBox="0 0 20 20" fill="currentColor"><path d="M17 12.4A7.5 7.5 0 0 1 7.6 3a7.5 7.5 0 1 0 9.4 9.4z"/></svg>
+          <svg class="icon-sun" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="10" cy="10" r="3.5"/><path d="M10 2.5v2M10 15.5v2M17.5 10h-2M4.5 10h-2M15.1 4.9l-1.4 1.4M6.3 13.7l-1.4 1.4M15.1 15.1l-1.4-1.4M6.3 6.3 4.9 4.9"/></svg>
+        </button>
+
+        <p class="credit">
+          Hecho por
+          <a href="https://services.francososa.dev" target="_blank" rel="noopener">Franco Sosa</a>
+          ·
+          <a href="https://github.com/francososa97/favs-panel" target="_blank" rel="noopener">Código en GitHub</a>
+        </p>
+      </div>
     </aside>
 
     <main class="main">
@@ -46,8 +64,22 @@
             <option value="za">Z → A</option>
             <option value="domain">Por dominio</option>
           </select>
-          <button id="toggle-view" class="btn-ghost" title="Cambiar densidad" aria-label="Cambiar densidad">
+
+          <div class="view-switch" role="group" aria-label="Tipo de vista">
+            <button id="view-list" class="view-btn active" title="Vista de lista" aria-label="Vista de lista" aria-pressed="true">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h12"/></svg>
+            </button>
+            <button id="view-grid" class="view-btn" title="Vista de grilla" aria-label="Vista de grilla" aria-pressed="false">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="11" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="11" width="6" height="6" rx="1.5"/><rect x="11" y="11" width="6" height="6" rx="1.5"/></svg>
+            </button>
+          </div>
+
+          <button id="toggle-view" class="btn-ghost" title="Vista compacta" aria-label="Vista compacta" aria-pressed="false">
             <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M4 6h12M4 10h12M4 14h8"/></svg>
+          </button>
+
+          <button id="new-bookmark" class="btn-fab" title="Nuevo favorito" aria-label="Nuevo favorito">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 4v12M4 10h12"/></svg>
           </button>
         </div>
       </header>
@@ -62,11 +94,36 @@
       <div id="empty" class="empty" hidden>
         <p>Nada por acá.</p>
         <p class="empty-sub">Probá con otra búsqueda u otra carpeta.</p>
+        <button id="empty-create" class="btn-primary">Crear un favorito</button>
       </div>
     </main>
   </div>
 
   <div id="toast" class="toast" hidden></div>
+
+  <div id="modal-backdrop" class="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <h2 id="modal-title">Nuevo favorito</h2>
+      <form id="bookmark-form">
+        <div class="field">
+          <label for="bm-title">Título</label>
+          <input id="bm-title" type="text" placeholder="Se usa el dominio si lo dejás vacío" autocomplete="off" />
+        </div>
+        <div class="field">
+          <label for="bm-url">URL</label>
+          <input id="bm-url" type="text" placeholder="https://ejemplo.com" autocomplete="off" required />
+        </div>
+        <div class="field">
+          <label for="bm-folder">Carpeta</label>
+          <select id="bm-folder"></select>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="modal-cancel" class="btn-secondary">Cancelar</button>
+          <button type="submit" class="btn-primary">Crear favorito</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>

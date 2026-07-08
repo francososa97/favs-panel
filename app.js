@@ -1,8 +1,10 @@
 // ---------- Estado ----------
 let allBookmarks = [];   // planos: {id, title, url, dateAdded, path, folderId}
 let folderIndex = {};    // id -> {title, children, count}
+let bookmarkTree = [];   // árbol crudo de chrome.bookmarks.getTree()
 let currentFolder = null; // null = todos
 let currentQuery = "";
+let viewMode = "list"; // "list" | "grid"
 
 const $ = (sel) => document.querySelector(sel);
 const listEl = $("#list");
@@ -52,6 +54,7 @@ function toast(msg) {
 // ---------- Carga ----------
 async function load() {
   const tree = await chrome.bookmarks.getTree();
+  bookmarkTree = tree;
   allBookmarks = [];
   folderIndex = {};
 
@@ -257,6 +260,44 @@ function buildRow(b) {
   return row;
 }
 
+function buildTile(b) {
+  const wrap = document.createElement("div");
+  wrap.className = "tile-wrap";
+  wrap.innerHTML = `
+    <a class="tile" href="${b.url}" target="_blank" rel="noopener" title="${b.url}">
+      <div class="tile-icon"><img class="favicon" loading="lazy" alt="" /></div>
+      <div class="tile-title"></div>
+    </a>
+    <div class="tile-actions">
+      <button class="act-copy" title="Copiar URL" aria-label="Copiar URL">${ICON_COPY}</button>
+      <button class="act-del" title="Eliminar favorito" aria-label="Eliminar favorito">${ICON_TRASH}</button>
+    </div>
+  `;
+  wrap.querySelector(".favicon").src = faviconUrl(b.url);
+  wrap.querySelector(".tile-title").textContent = b.title;
+
+  wrap.querySelector(".tile").addEventListener("click", (e) => {
+    e.preventDefault();
+    chrome.tabs.create({ url: b.url, active: !e.ctrlKey && !e.metaKey });
+  });
+
+  wrap.querySelector(".act-copy").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    await navigator.clipboard.writeText(b.url);
+    toast("URL copiada");
+  });
+
+  wrap.querySelector(".act-del").addEventListener("click", async (e) => {
+    e.stopPropagation();
+    if (!confirm(`¿Eliminar "${b.title}" de tus favoritos?`)) return;
+    await chrome.bookmarks.remove(b.id);
+    toast("Favorito eliminado");
+    load();
+  });
+
+  return wrap;
+}
+
 function render() {
   const items = getVisible();
   $("#context-count").textContent = `${items.length} items`;
@@ -282,8 +323,13 @@ function render() {
     }
 
     const list = document.createElement("div");
-    list.className = "section-list";
-    for (const b of section.items) list.appendChild(buildRow(b));
+    if (viewMode === "grid") {
+      list.className = "tile-grid";
+      for (const b of section.items) list.appendChild(buildTile(b));
+    } else {
+      list.className = "section-list";
+      for (const b of section.items) list.appendChild(buildRow(b));
+    }
     sectionEl.appendChild(list);
 
     frag.appendChild(sectionEl);
@@ -303,8 +349,98 @@ $("#toggle-view").addEventListener("click", () => {
   listEl.classList.toggle("compact");
 });
 
+function setViewMode(mode) {
+  viewMode = mode;
+  listEl.classList.toggle("grid-mode", mode === "grid");
+  $("#view-list").classList.toggle("active", mode === "list");
+  $("#view-list").setAttribute("aria-pressed", String(mode === "list"));
+  $("#view-grid").classList.toggle("active", mode === "grid");
+  $("#view-grid").setAttribute("aria-pressed", String(mode === "grid"));
+  $("#toggle-view").disabled = mode === "grid";
+  render();
+}
+
+$("#view-list").addEventListener("click", () => setViewMode("list"));
+$("#view-grid").addEventListener("click", () => setViewMode("grid"));
+
+// ---------- Modal: nuevo favorito ----------
+function buildFolderOptions() {
+  const select = $("#bm-folder");
+  select.innerHTML = "";
+
+  function walk(node, depth) {
+    for (const child of node.children || []) {
+      if (child.url) continue;
+      const option = document.createElement("option");
+      option.value = child.id;
+      option.textContent = `${"—".repeat(depth)} ${folderIndex[child.id].title}`.trim();
+      select.appendChild(option);
+      walk(child, depth + 1);
+    }
+  }
+
+  for (const root of bookmarkTree) walk(root, 0);
+  if (currentFolder && [...select.options].some((o) => o.value === currentFolder)) {
+    select.value = currentFolder;
+  }
+}
+
+function openModal() {
+  buildFolderOptions();
+  $("#bm-title").value = "";
+  $("#bm-url").value = "";
+  $("#modal-backdrop").hidden = false;
+  $("#bm-title").focus();
+}
+
+function closeModal() {
+  $("#modal-backdrop").hidden = true;
+}
+
+$("#new-bookmark").addEventListener("click", openModal);
+$("#empty-create").addEventListener("click", openModal);
+$("#modal-cancel").addEventListener("click", closeModal);
+
+$("#modal-backdrop").addEventListener("click", (e) => {
+  if (e.target.id === "modal-backdrop") closeModal();
+});
+
+$("#bookmark-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  let url = $("#bm-url").value.trim();
+  if (!url) return;
+  if (!/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(url)) url = `https://${url}`;
+  try {
+    new URL(url);
+  } catch {
+    toast("URL inválida");
+    return;
+  }
+
+  const title = $("#bm-title").value.trim() || domainOf(url);
+  const parentId = $("#bm-folder").value || undefined;
+
+  await chrome.bookmarks.create({ parentId, title, url });
+  closeModal();
+  toast("Favorito creado");
+  load();
+});
+
 document.addEventListener("keydown", (e) => {
-  if (e.key === "/" && document.activeElement !== $("#search")) {
+  const modalOpen = !$("#modal-backdrop").hidden;
+  const isTyping = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName);
+
+  if (e.key === "Escape" && modalOpen) {
+    closeModal();
+    return;
+  }
+  if (e.key === "n" && !isTyping && !modalOpen) {
+    e.preventDefault();
+    openModal();
+    return;
+  }
+  if (e.key === "/" && !isTyping) {
     e.preventDefault();
     $("#search").focus();
   }
@@ -315,5 +451,37 @@ chrome.bookmarks.onCreated.addListener(load);
 chrome.bookmarks.onRemoved.addListener(load);
 chrome.bookmarks.onChanged.addListener(load);
 chrome.bookmarks.onMoved.addListener(load);
+
+// ---------- Tema claro/oscuro ----------
+const systemDark = window.matchMedia("(prefers-color-scheme: dark)");
+
+function effectiveTheme() {
+  const attr = document.documentElement.getAttribute("data-theme");
+  if (attr === "light" || attr === "dark") return attr;
+  return systemDark.matches ? "dark" : "light";
+}
+
+function updateThemeToggle() {
+  const isDark = effectiveTheme() === "dark";
+  const btn = $("#theme-toggle");
+  btn.classList.toggle("is-dark", isDark);
+  btn.setAttribute("aria-pressed", String(isDark));
+  const label = isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro";
+  btn.title = label;
+  btn.setAttribute("aria-label", label);
+}
+
+$("#theme-toggle").addEventListener("click", () => {
+  const next = effectiveTheme() === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  localStorage.setItem("favs-theme", next);
+  updateThemeToggle();
+});
+
+systemDark.addEventListener("change", () => {
+  if (document.documentElement.getAttribute("data-theme") === "auto") updateThemeToggle();
+});
+
+updateThemeToggle();
 
 load();
