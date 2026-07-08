@@ -279,6 +279,24 @@ body {
 
 .credit a:hover { color: var(--accent); text-decoration: underline; }
 
+.coffee-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: var(--fill);
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.coffee-link svg { width: 13px; height: 13px; flex: none; }
+.coffee-link:hover { color: var(--accent); background: var(--pressed); }
+
 /* ---------- Main ---------- */
 .main {
   display: flex;
