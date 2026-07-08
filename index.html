@@ -5,11 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Favs Panel</title>
   <link rel="stylesheet" href="styles.css" />
-  <script>
-    // Aplica el tema y el idioma guardados antes del primer paint para evitar parpadeo.
-    document.documentElement.setAttribute("data-theme", localStorage.getItem("favs-theme") || "auto");
-    document.documentElement.lang = localStorage.getItem("favs-lang") || "en";
-  </script>
+  <script src="theme-init.js"></script>
 </head>
 <body>
   <div class="app">
