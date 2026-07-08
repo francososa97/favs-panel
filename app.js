@@ -5,11 +5,140 @@ let bookmarkTree = [];   // árbol crudo de chrome.bookmarks.getTree()
 let currentFolder = null; // null = todos
 let currentQuery = "";
 let viewMode = "list"; // "list" | "grid"
+let lang = localStorage.getItem("favs-lang") || "en"; // por defecto en inglés
 
 const $ = (sel) => document.querySelector(sel);
 const listEl = $("#list");
 const treeEl = $("#folder-tree");
 const emptyEl = $("#empty");
+
+// ---------- Traducciones ----------
+const STRINGS = {
+  en: {
+    folderNavLabel: "Bookmark folders",
+    searchPlaceholder: "Search by title or URL…  ( / )",
+    sortLabel: "Sort",
+    sortRecent: "Most recent",
+    sortOldest: "Oldest",
+    sortAz: "A → Z",
+    sortZa: "Z → A",
+    sortDomain: "By domain",
+    viewTypeLabel: "View type",
+    viewList: "List view",
+    viewGrid: "Grid view",
+    compactView: "Compact view",
+    newBookmark: "New bookmark",
+    allBookmarks: "All bookmarks",
+    emptyTitle: "Nothing here.",
+    emptySub: "Try another search or folder.",
+    emptyCreate: "Create a bookmark",
+    modalTitle: "New bookmark",
+    fieldTitle: "Title",
+    titlePlaceholder: "Uses the domain if left empty",
+    fieldUrl: "URL",
+    fieldFolder: "Folder",
+    cancel: "Cancel",
+    create: "Create bookmark",
+    themeToLight: "Switch to light mode",
+    themeToDark: "Switch to dark mode",
+    langSwitch: "Switch to Spanish",
+    creditPrefix: "Made by",
+    creditGithub: "Code on GitHub",
+    general: "General",
+    otherFolder: "Other",
+    rootFolderTitle: "Bookmarks",
+    rootPath: "root",
+    stats: (n, f) => `${n} bookmarks · ${f} folders`,
+    itemsCount: (n) => `${n} items`,
+    dateNever: "—",
+    dateToday: "today",
+    dateYesterday: "yesterday",
+    dateDays: (d) => `${d}d ago`,
+    dateMonths: (m) => `${m}mo ago`,
+    dateYears: (y) => `${y}y ago`,
+    copyUrl: "Copy URL",
+    deleteBookmark: "Delete bookmark",
+    urlCopied: "URL copied",
+    bookmarkDeleted: "Bookmark deleted",
+    invalidUrl: "Invalid URL",
+    bookmarkCreated: "Bookmark created",
+    confirmDelete: (title) => `Delete "${title}" from your bookmarks?`,
+  },
+  es: {
+    folderNavLabel: "Carpetas de favoritos",
+    searchPlaceholder: "Buscar por título o URL…  ( / )",
+    sortLabel: "Ordenar",
+    sortRecent: "Más recientes",
+    sortOldest: "Más antiguos",
+    sortAz: "A → Z",
+    sortZa: "Z → A",
+    sortDomain: "Por dominio",
+    viewTypeLabel: "Tipo de vista",
+    viewList: "Vista de lista",
+    viewGrid: "Vista de grilla",
+    compactView: "Vista compacta",
+    newBookmark: "Nuevo favorito",
+    allBookmarks: "Todos los favoritos",
+    emptyTitle: "Nada por acá.",
+    emptySub: "Probá con otra búsqueda u otra carpeta.",
+    emptyCreate: "Crear un favorito",
+    modalTitle: "Nuevo favorito",
+    fieldTitle: "Título",
+    titlePlaceholder: "Se usa el dominio si lo dejás vacío",
+    fieldUrl: "URL",
+    fieldFolder: "Carpeta",
+    cancel: "Cancelar",
+    create: "Crear favorito",
+    themeToLight: "Cambiar a modo claro",
+    themeToDark: "Cambiar a modo oscuro",
+    langSwitch: "Cambiar a inglés",
+    creditPrefix: "Hecho por",
+    creditGithub: "Código en GitHub",
+    general: "General",
+    otherFolder: "Otros",
+    rootFolderTitle: "Favoritos",
+    rootPath: "raíz",
+    stats: (n, f) => `${n} favoritos · ${f} carpetas`,
+    itemsCount: (n) => `${n} items`,
+    dateNever: "—",
+    dateToday: "hoy",
+    dateYesterday: "ayer",
+    dateDays: (d) => `hace ${d}d`,
+    dateMonths: (m) => `hace ${m}m`,
+    dateYears: (y) => `hace ${y}a`,
+    copyUrl: "Copiar URL",
+    deleteBookmark: "Eliminar favorito",
+    urlCopied: "URL copiada",
+    bookmarkDeleted: "Favorito eliminado",
+    invalidUrl: "URL inválida",
+    bookmarkCreated: "Favorito creado",
+    confirmDelete: (title) => `¿Eliminar "${title}" de tus favoritos?`,
+  },
+};
+
+function t(key, ...args) {
+  const entry = STRINGS[lang][key];
+  return typeof entry === "function" ? entry(...args) : entry;
+}
+
+function applyStaticTranslations() {
+  document.documentElement.lang = lang;
+
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    el.textContent = t(el.getAttribute("data-i18n"));
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+    el.placeholder = t(el.getAttribute("data-i18n-placeholder"));
+  });
+  document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+    const label = t(el.getAttribute("data-i18n-title"));
+    el.title = label;
+    el.setAttribute("aria-label", label);
+  });
+  document.querySelectorAll("[data-i18n-aria]").forEach((el) => {
+    el.setAttribute("aria-label", t(el.getAttribute("data-i18n-aria")));
+  });
+}
 
 // ---------- Iconos (SVG inline, sin emojis) ----------
 const ICON_CHEVRON =
@@ -28,14 +157,14 @@ function faviconUrl(pageUrl) {
 }
 
 function relativeDate(ts) {
-  if (!ts) return "—";
+  if (!ts) return t("dateNever");
   const diff = Date.now() - ts;
   const d = Math.floor(diff / 86400000);
-  if (d === 0) return "hoy";
-  if (d === 1) return "ayer";
-  if (d < 30) return `hace ${d}d`;
-  if (d < 365) return `hace ${Math.floor(d / 30)}m`;
-  return `hace ${Math.floor(d / 365)}a`;
+  if (d === 0) return t("dateToday");
+  if (d === 1) return t("dateYesterday");
+  if (d < 30) return t("dateDays", d);
+  if (d < 365) return t("dateMonths", Math.floor(d / 30));
+  return t("dateYears", Math.floor(d / 365));
 }
 
 function domainOf(url) {
@@ -44,11 +173,11 @@ function domainOf(url) {
 }
 
 function toast(msg) {
-  const t = $("#toast");
-  t.textContent = msg;
-  t.hidden = false;
+  const el = $("#toast");
+  el.textContent = msg;
+  el.hidden = false;
   clearTimeout(toast._t);
-  toast._t = setTimeout(() => (t.hidden = true), 1600);
+  toast._t = setTimeout(() => (el.hidden = true), 1600);
 }
 
 // ---------- Carga ----------
@@ -65,7 +194,7 @@ async function load() {
         title: node.title || node.url,
         url: node.url,
         dateAdded: node.dateAdded || 0,
-        path: path.join(" / ") || "raíz",
+        path: path.join(" / ") || t("rootPath"),
         pathIds,
       });
       return 1;
@@ -84,7 +213,7 @@ async function load() {
     }
     folderIndex[node.id] = {
       id: node.id,
-      title: node.title || "Favoritos",
+      title: node.title || t("rootFolderTitle"),
       children,
       count,
     };
@@ -93,8 +222,8 @@ async function load() {
 
   for (const root of tree) walk(root, [], []);
 
-  const totalFolders = Object.values(folderIndex).filter((f) => f.title !== "Favoritos").length;
-  $("#global-stats").textContent = `${allBookmarks.length} favoritos · ${totalFolders} carpetas`;
+  const totalFolders = Object.values(folderIndex).filter((f) => f.title !== t("rootFolderTitle")).length;
+  $("#global-stats").textContent = t("stats", allBookmarks.length, totalFolders);
 
   renderTree(tree);
   render();
@@ -104,9 +233,9 @@ async function load() {
 function renderTree(tree) {
   treeEl.innerHTML = "";
 
-  const allBtn = makeTreeItem({ title: "Todos los favoritos", count: allBookmarks.length }, 0, false);
+  const allBtn = makeTreeItem({ title: t("allBookmarks"), count: allBookmarks.length }, 0, false);
   allBtn.classList.add("active");
-  allBtn.addEventListener("click", () => selectFolder(null, allBtn, "Todos los favoritos"));
+  allBtn.addEventListener("click", () => selectFolder(null, allBtn, t("allBookmarks")));
   treeEl.appendChild(allBtn);
 
   function build(node, depth, container) {
@@ -169,7 +298,7 @@ function sectionKeyFor(b) {
   if (currentFolder) {
     const idx = b.pathIds.indexOf(currentFolder);
     const childId = idx !== -1 ? b.pathIds[idx + 1] : undefined;
-    return childId ? folderIndex[childId]?.title || "Otros" : GENERAL_KEY;
+    return childId ? folderIndex[childId]?.title || t("otherFolder") : GENERAL_KEY;
   }
   const segs = b.path.split(" / ").filter(Boolean);
   return segs.length ? segs[segs.length - 1] : GENERAL_KEY;
@@ -185,7 +314,7 @@ function groupIntoSections(items) {
   const keys = [...buckets.keys()].sort((a, b) => {
     if (a === GENERAL_KEY) return 1;
     if (b === GENERAL_KEY) return -1;
-    return a.localeCompare(b, "es");
+    return a.localeCompare(b, lang);
   });
   return keys.map((key) => ({ key, items: buckets.get(key) }));
 }
@@ -209,8 +338,8 @@ function getVisible() {
   const sorted = [...items];
   if (sort === "recent") sorted.sort((a, b) => b.dateAdded - a.dateAdded);
   if (sort === "oldest") sorted.sort((a, b) => a.dateAdded - b.dateAdded);
-  if (sort === "az") sorted.sort((a, b) => a.title.localeCompare(b.title, "es"));
-  if (sort === "za") sorted.sort((a, b) => b.title.localeCompare(a.title, "es"));
+  if (sort === "az") sorted.sort((a, b) => a.title.localeCompare(b.title, lang));
+  if (sort === "za") sorted.sort((a, b) => b.title.localeCompare(a.title, lang));
   if (sort === "domain") sorted.sort((a, b) => domainOf(a.url).localeCompare(domainOf(b.url)));
   return sorted;
 }
@@ -229,8 +358,8 @@ function buildRow(b) {
       </div>
     </div>
     <div class="actions">
-      <button class="act-copy" title="Copiar URL" aria-label="Copiar URL">${ICON_COPY}</button>
-      <button class="act-del" title="Eliminar favorito" aria-label="Eliminar favorito">${ICON_TRASH}</button>
+      <button class="act-copy" title="${t("copyUrl")}" aria-label="${t("copyUrl")}">${ICON_COPY}</button>
+      <button class="act-del" title="${t("deleteBookmark")}" aria-label="${t("deleteBookmark")}">${ICON_TRASH}</button>
     </div>
   `;
   row.querySelector(".favicon").src = faviconUrl(b.url);
@@ -247,13 +376,13 @@ function buildRow(b) {
 
   row.querySelector(".act-copy").addEventListener("click", async () => {
     await navigator.clipboard.writeText(b.url);
-    toast("URL copiada");
+    toast(t("urlCopied"));
   });
 
   row.querySelector(".act-del").addEventListener("click", async () => {
-    if (!confirm(`¿Eliminar "${b.title}" de tus favoritos?`)) return;
+    if (!confirm(t("confirmDelete", b.title))) return;
     await chrome.bookmarks.remove(b.id);
-    toast("Favorito eliminado");
+    toast(t("bookmarkDeleted"));
     load();
   });
 
@@ -269,8 +398,8 @@ function buildTile(b) {
       <div class="tile-title"></div>
     </a>
     <div class="tile-actions">
-      <button class="act-copy" title="Copiar URL" aria-label="Copiar URL">${ICON_COPY}</button>
-      <button class="act-del" title="Eliminar favorito" aria-label="Eliminar favorito">${ICON_TRASH}</button>
+      <button class="act-copy" title="${t("copyUrl")}" aria-label="${t("copyUrl")}">${ICON_COPY}</button>
+      <button class="act-del" title="${t("deleteBookmark")}" aria-label="${t("deleteBookmark")}">${ICON_TRASH}</button>
     </div>
   `;
   wrap.querySelector(".favicon").src = faviconUrl(b.url);
@@ -284,14 +413,14 @@ function buildTile(b) {
   wrap.querySelector(".act-copy").addEventListener("click", async (e) => {
     e.stopPropagation();
     await navigator.clipboard.writeText(b.url);
-    toast("URL copiada");
+    toast(t("urlCopied"));
   });
 
   wrap.querySelector(".act-del").addEventListener("click", async (e) => {
     e.stopPropagation();
-    if (!confirm(`¿Eliminar "${b.title}" de tus favoritos?`)) return;
+    if (!confirm(t("confirmDelete", b.title))) return;
     await chrome.bookmarks.remove(b.id);
-    toast("Favorito eliminado");
+    toast(t("bookmarkDeleted"));
     load();
   });
 
@@ -300,7 +429,7 @@ function buildTile(b) {
 
 function render() {
   const items = getVisible();
-  $("#context-count").textContent = `${items.length} items`;
+  $("#context-count").textContent = t("itemsCount", items.length);
   listEl.innerHTML = "";
   emptyEl.hidden = items.length > 0;
 
@@ -317,7 +446,7 @@ function render() {
       header.className = "section-header";
       header.innerHTML = `<h3></h3><span class="count"></span>`;
       header.querySelector("h3").textContent =
-        section.key === GENERAL_KEY ? "General" : section.key;
+        section.key === GENERAL_KEY ? t("general") : section.key;
       header.querySelector(".count").textContent = section.items.length;
       sectionEl.appendChild(header);
     }
@@ -414,7 +543,7 @@ $("#bookmark-form").addEventListener("submit", async (e) => {
   try {
     new URL(url);
   } catch {
-    toast("URL inválida");
+    toast(t("invalidUrl"));
     return;
   }
 
@@ -423,7 +552,7 @@ $("#bookmark-form").addEventListener("submit", async (e) => {
 
   await chrome.bookmarks.create({ parentId, title, url });
   closeModal();
-  toast("Favorito creado");
+  toast(t("bookmarkCreated"));
   load();
 });
 
@@ -466,7 +595,7 @@ function updateThemeToggle() {
   const btn = $("#theme-toggle");
   btn.classList.toggle("is-dark", isDark);
   btn.setAttribute("aria-pressed", String(isDark));
-  const label = isDark ? "Cambiar a modo claro" : "Cambiar a modo oscuro";
+  const label = isDark ? t("themeToLight") : t("themeToDark");
   btn.title = label;
   btn.setAttribute("aria-label", label);
 }
@@ -482,6 +611,26 @@ systemDark.addEventListener("change", () => {
   if (document.documentElement.getAttribute("data-theme") === "auto") updateThemeToggle();
 });
 
-updateThemeToggle();
+// ---------- Idioma ----------
+function updateLangToggle() {
+  const btn = $("#lang-toggle");
+  btn.querySelector(".lang-code").textContent = lang.toUpperCase();
+  const label = t("langSwitch");
+  btn.title = label;
+  btn.setAttribute("aria-label", label);
+}
 
+$("#lang-toggle").addEventListener("click", () => {
+  lang = lang === "en" ? "es" : "en";
+  localStorage.setItem("favs-lang", lang);
+  applyStaticTranslations();
+  updateLangToggle();
+  updateThemeToggle();
+  load();
+});
+
+// ---------- Arranque ----------
+applyStaticTranslations();
+updateThemeToggle();
+updateLangToggle();
 load();

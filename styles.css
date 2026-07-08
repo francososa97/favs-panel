@@ -215,26 +215,54 @@ body {
   gap: 10px;
 }
 
-.theme-toggle {
-  width: 32px;
-  height: 32px;
-  border: none;
-  border-radius: 50%;
-  background: var(--fill);
-  color: var(--text-dim);
+.footer-actions {
   display: flex;
   align-items: center;
-  justify-content: center;
+  gap: 8px;
+}
+
+.icon-toggle {
+  border: none;
+  background: var(--fill);
+  color: var(--text-dim);
   cursor: pointer;
   transition: background 0.12s ease, color 0.12s ease;
 }
 
-.theme-toggle:hover { color: var(--text); background: var(--pressed); }
+.icon-toggle:hover { color: var(--text); background: var(--pressed); }
+
+.theme-toggle {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .theme-toggle svg { width: 16px; height: 16px; }
 
 .theme-toggle .icon-sun { display: none; }
 .theme-toggle.is-dark .icon-moon { display: none; }
 .theme-toggle.is-dark .icon-sun { display: block; }
+
+.lang-toggle {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.lang-toggle svg { width: 14px; height: 14px; }
+
+.lang-toggle .lang-code {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
 
 .credit {
   font-size: 11px;
@@ -314,6 +342,14 @@ body {
   font-size: 13px;
   outline: none;
   cursor: pointer;
+}
+
+/* El popup nativo de <option> no hereda el fondo translúcido del control;
+   sin esto, se abre con blanco fijo aunque el tema sea oscuro. */
+#sort option,
+#bm-folder option {
+  background: var(--surface);
+  color: var(--text);
 }
 
 .btn-ghost {
