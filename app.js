@@ -632,6 +632,7 @@ $("#lang-toggle").addEventListener("click", () => {
 });
 
 // ---------- Arranque ----------
+$("#app-version").textContent = `v${chrome.runtime.getManifest().version}`;
 applyStaticTranslations();
 updateThemeToggle();
 updateLangToggle();
