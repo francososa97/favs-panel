@@ -116,16 +116,8 @@ body {
   width: 30px;
   height: 30px;
   border-radius: 8px;
-  background: linear-gradient(160deg, #4dabff, var(--accent));
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
   flex: none;
-  box-shadow: 0 2px 6px rgba(0, 113, 227, 0.35);
 }
-
-.brand-mark svg { width: 17px; height: 17px; }
 
 .brand-title {
   display: flex;
