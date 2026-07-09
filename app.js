@@ -4,8 +4,10 @@ let folderIndex = {};    // id -> {title, children, count}
 let bookmarkTree = [];   // árbol crudo de chrome.bookmarks.getTree()
 let currentFolder = null; // null = todos
 let currentQuery = "";
-let viewMode = "list"; // "list" | "grid"
+let viewMode = "list"; // "list" | "grid" | "cover" | "kanban"
 let lang = localStorage.getItem("favs-lang") || "en"; // por defecto en inglés
+const selectedIds = new Set(); // selección múltiple para borrado masivo
+let draggingId = null; // id del favorito que se está arrastrando (kanban)
 
 const $ = (sel) => document.querySelector(sel);
 const listEl = $("#list");
@@ -23,10 +25,14 @@ const STRINGS = {
     sortAz: "A → Z",
     sortZa: "Z → A",
     sortDomain: "By domain",
+    sortManual: "Manual",
     viewTypeLabel: "View type",
     viewList: "List view",
     viewGrid: "Grid view",
+    viewCover: "Cover view",
+    viewKanban: "Kanban view",
     compactView: "Compact view",
+    recentlyAdded: "Recently added",
     newBookmark: "New bookmark",
     allBookmarks: "All bookmarks",
     emptyTitle: "Nothing here.",
@@ -59,11 +65,21 @@ const STRINGS = {
     dateYears: (y) => `${y}y ago`,
     copyUrl: "Copy URL",
     deleteBookmark: "Delete bookmark",
+    editBookmark: "Edit bookmark",
+    saveEdit: "Save",
+    selectBookmark: "Select bookmark",
+    itemsSelected: (n) => `${n} selected`,
+    deleteSelectedBtn: "Delete selected",
     urlCopied: "URL copied",
     bookmarkDeleted: "Bookmark deleted",
+    bookmarkUpdated: "Bookmark updated",
+    bookmarkMoved: "Bookmark moved",
     invalidUrl: "Invalid URL",
     bookmarkCreated: "Bookmark created",
     confirmDelete: (title) => `Delete "${title}" from your bookmarks?`,
+    confirmDeleteMultiple: (n) => `Delete ${n} bookmarks from your bookmarks?`,
+    openAllLinks: (n) => `Open all (${n})`,
+    confirmOpenAll: (n) => `Open ${n} links in new tabs?`,
   },
   es: {
     folderNavLabel: "Carpetas de favoritos",
@@ -74,10 +90,14 @@ const STRINGS = {
     sortAz: "A → Z",
     sortZa: "Z → A",
     sortDomain: "Por dominio",
+    sortManual: "Manual",
     viewTypeLabel: "Tipo de vista",
     viewList: "Vista de lista",
     viewGrid: "Vista de grilla",
+    viewCover: "Vista de portadas",
+    viewKanban: "Vista kanban",
     compactView: "Vista compacta",
+    recentlyAdded: "Recién añadido",
     newBookmark: "Nuevo favorito",
     allBookmarks: "Todos los favoritos",
     emptyTitle: "Nada por acá.",
@@ -110,11 +130,21 @@ const STRINGS = {
     dateYears: (y) => `hace ${y}a`,
     copyUrl: "Copiar URL",
     deleteBookmark: "Eliminar favorito",
+    editBookmark: "Editar favorito",
+    saveEdit: "Guardar",
+    selectBookmark: "Seleccionar favorito",
+    itemsSelected: (n) => `${n} seleccionados`,
+    deleteSelectedBtn: "Eliminar seleccionados",
     urlCopied: "URL copiada",
     bookmarkDeleted: "Favorito eliminado",
+    bookmarkUpdated: "Favorito actualizado",
+    bookmarkMoved: "Favorito movido",
     invalidUrl: "URL inválida",
     bookmarkCreated: "Favorito creado",
     confirmDelete: (title) => `¿Eliminar "${title}" de tus favoritos?`,
+    confirmDeleteMultiple: (n) => `¿Eliminar ${n} favoritos de tus favoritos?`,
+    openAllLinks: (n) => `Abrir todos (${n})`,
+    confirmOpenAll: (n) => `¿Abrir ${n} enlaces en pestañas nuevas?`,
   },
 };
 
@@ -149,6 +179,12 @@ const ICON_COPY =
   '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="9" height="9" rx="2"/><path d="M4.5 13V5.5a2 2 0 0 1 2-2H14"/></svg>';
 const ICON_TRASH =
   '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h12M8 6V4.5A1.5 1.5 0 0 1 9.5 3h1A1.5 1.5 0 0 1 12 4.5V6m-6 0 .6 9a1.5 1.5 0 0 0 1.5 1.4h3.8a1.5 1.5 0 0 0 1.5-1.4L14 6"/></svg>';
+const ICON_EDIT =
+  '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 3.5a1.7 1.7 0 0 1 2.4 2.4L7 15l-3.5 1L4.5 12.5l9-9z"/></svg>';
+const ICON_CHECK =
+  '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10.5l4 4 8-9"/></svg>';
+const ICON_CLOSE =
+  '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l10 10M15 5 5 15"/></svg>';
 
 // ---------- Helpers ----------
 function faviconUrl(pageUrl) {
@@ -174,12 +210,76 @@ function domainOf(url) {
   catch { return url; }
 }
 
+const RECENT_MS = 7 * 24 * 60 * 60 * 1000;
+function isRecentlyAdded(b) {
+  return b.dateAdded > 0 && Date.now() - b.dateAdded < RECENT_MS;
+}
+
 function toast(msg) {
   const el = $("#toast");
   el.textContent = msg;
   el.hidden = false;
   clearTimeout(toast._t);
   toast._t = setTimeout(() => (el.hidden = true), 1600);
+}
+
+// ---------- Menú contextual (clic derecho) ----------
+function closeContextMenu() {
+  $("#ctx-menu")?.remove();
+  document.removeEventListener("click", closeContextMenu);
+  document.removeEventListener("contextmenu", closeContextMenu);
+  document.removeEventListener("keydown", ctxMenuKeydown);
+}
+
+function ctxMenuKeydown(e) {
+  if (e.key === "Escape") closeContextMenu();
+}
+
+function showContextMenu(x, y, items) {
+  closeContextMenu();
+  const menu = document.createElement("div");
+  menu.id = "ctx-menu";
+  menu.className = "ctx-menu";
+  for (const item of items) {
+    const btn = document.createElement("button");
+    btn.className = "ctx-menu-item";
+    btn.textContent = item.label;
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      closeContextMenu();
+      item.onClick();
+    });
+    menu.appendChild(btn);
+  }
+  document.body.appendChild(menu);
+
+  const rect = menu.getBoundingClientRect();
+  const maxX = window.innerWidth - rect.width - 8;
+  const maxY = window.innerHeight - rect.height - 8;
+  menu.style.left = `${Math.max(8, Math.min(x, maxX))}px`;
+  menu.style.top = `${Math.max(8, Math.min(y, maxY))}px`;
+
+  setTimeout(() => {
+    document.addEventListener("click", closeContextMenu);
+    document.addEventListener("contextmenu", closeContextMenu);
+    document.addEventListener("keydown", ctxMenuKeydown);
+  }, 0);
+}
+
+async function openAllBookmarks(items) {
+  if (!items.length) return;
+  if (items.length > 8 && !confirm(t("confirmOpenAll", items.length))) return;
+  for (const b of items) await chrome.tabs.create({ url: b.url, active: false });
+}
+
+function attachOpenAllContextMenu(el, getItems) {
+  el.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    const items = getItems();
+    showContextMenu(e.clientX, e.clientY, [
+      { label: t("openAllLinks", items.length), onClick: () => openAllBookmarks(items) },
+    ]);
+  });
 }
 
 // ---------- Carga ----------
@@ -238,6 +338,7 @@ function renderTree(tree) {
   const allBtn = makeTreeItem({ title: t("allBookmarks"), count: allBookmarks.length }, 0, false);
   allBtn.classList.add("active");
   allBtn.addEventListener("click", () => selectFolder(null, allBtn, t("allBookmarks")));
+  attachOpenAllContextMenu(allBtn, () => allBookmarks);
   treeEl.appendChild(allBtn);
 
   function build(node, depth, container) {
@@ -265,6 +366,8 @@ function renderTree(tree) {
         }
         selectFolder(child.id, btn, info.title);
       });
+
+      attachOpenAllContextMenu(btn, () => allBookmarks.filter((b) => b.pathIds.includes(child.id)));
     }
   }
 
@@ -296,29 +399,35 @@ function selectFolder(folderId, btn, title) {
 // ---------- Agrupado por secciones ----------
 const GENERAL_KEY = "__general__";
 
-function sectionKeyFor(b) {
+// Carpeta real que contiene el favorito, según la carpeta actualmente seleccionada.
+function sectionInfoFor(b) {
   if (currentFolder) {
     const idx = b.pathIds.indexOf(currentFolder);
     const childId = idx !== -1 ? b.pathIds[idx + 1] : undefined;
-    return childId ? folderIndex[childId]?.title || t("otherFolder") : GENERAL_KEY;
+    if (childId) {
+      return { key: childId, folderId: childId, title: folderIndex[childId]?.title || t("otherFolder") };
+    }
+    return { key: GENERAL_KEY, folderId: currentFolder, title: t("general") };
   }
-  const segs = b.path.split(" / ").filter(Boolean);
-  return segs.length ? segs[segs.length - 1] : GENERAL_KEY;
+  const folderId = b.pathIds[b.pathIds.length - 1];
+  if (!folderId) return { key: GENERAL_KEY, folderId: null, title: t("general") };
+  return { key: folderId, folderId, title: folderIndex[folderId]?.title || t("general") };
 }
 
 function groupIntoSections(items) {
   const buckets = new Map();
   for (const b of items) {
-    const key = sectionKeyFor(b);
-    if (!buckets.has(key)) buckets.set(key, []);
-    buckets.get(key).push(b);
+    const info = sectionInfoFor(b);
+    if (!buckets.has(info.key)) buckets.set(info.key, { key: info.key, folderId: info.folderId, title: info.title, items: [] });
+    buckets.get(info.key).items.push(b);
   }
-  const keys = [...buckets.keys()].sort((a, b) => {
-    if (a === GENERAL_KEY) return 1;
-    if (b === GENERAL_KEY) return -1;
-    return a.localeCompare(b, lang);
+  const sections = [...buckets.values()];
+  sections.sort((a, b) => {
+    if (a.key === GENERAL_KEY) return 1;
+    if (b.key === GENERAL_KEY) return -1;
+    return a.title.localeCompare(b.title, lang);
   });
-  return keys.map((key) => ({ key, items: buckets.get(key) }));
+  return sections;
 }
 
 // ---------- Filtrado + render ----------
@@ -346,11 +455,235 @@ function getVisible() {
   return sorted;
 }
 
+// ---------- Selección múltiple ----------
+function setSelected(id, on) {
+  if (on) selectedIds.add(id);
+  else selectedIds.delete(id);
+  listEl.classList.toggle("has-selection", selectedIds.size > 0);
+  updateBulkBar();
+}
+
+function clearSelection() {
+  selectedIds.clear();
+  render();
+}
+
+function updateBulkBar() {
+  const bar = $("#bulk-bar");
+  const n = selectedIds.size;
+  bar.hidden = n === 0;
+  if (n > 0) $("#bulk-count").textContent = t("itemsSelected", n);
+}
+
+$("#bulk-cancel").addEventListener("click", clearSelection);
+
+$("#bulk-delete").addEventListener("click", async () => {
+  const ids = [...selectedIds];
+  if (!ids.length) return;
+  if (!confirm(t("confirmDeleteMultiple", ids.length))) return;
+  await Promise.all(ids.map((id) => chrome.bookmarks.remove(id)));
+  selectedIds.clear();
+  $("#bulk-bar").hidden = true;
+  toast(t("bookmarkDeleted"));
+  load();
+});
+
+// ---------- Drag & drop estilo kanban entre carpetas ----------
+function clearDragClasses() {
+  document
+    .querySelectorAll(".drag-over-top, .drag-over-bottom, .drag-over")
+    .forEach((n) => n.classList.remove("drag-over-top", "drag-over-bottom", "drag-over"));
+}
+
+function attachDragSource(el, b) {
+  el.draggable = true;
+  el.addEventListener("dragstart", (e) => {
+    draggingId = b.id;
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", b.id);
+    el.classList.add("dragging");
+  });
+  el.addEventListener("dragend", () => {
+    draggingId = null;
+    el.classList.remove("dragging");
+    clearDragClasses();
+  });
+  el.addEventListener("dragover", (e) => {
+    if (!draggingId || draggingId === b.id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+    const rect = el.getBoundingClientRect();
+    const before = e.clientY < rect.top + rect.height / 2;
+    el.classList.toggle("drag-over-top", before);
+    el.classList.toggle("drag-over-bottom", !before);
+  });
+  el.addEventListener("dragleave", () => {
+    el.classList.remove("drag-over-top", "drag-over-bottom");
+  });
+  el.addEventListener("drop", async (e) => {
+    if (!draggingId || draggingId === b.id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const before = el.classList.contains("drag-over-top");
+    el.classList.remove("drag-over-top", "drag-over-bottom");
+    await dropBookmarkNear(draggingId, b.id, before);
+  });
+}
+
+function attachDragContainer(container, folderId) {
+  if (folderId == null) return;
+  container.addEventListener("dragover", (e) => {
+    if (!draggingId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    container.classList.add("drag-over");
+  });
+  container.addEventListener("dragleave", (e) => {
+    if (e.target === container) container.classList.remove("drag-over");
+  });
+  container.addEventListener("drop", async (e) => {
+    if (!draggingId) return;
+    e.preventDefault();
+    container.classList.remove("drag-over");
+    await dropBookmarkAtEnd(draggingId, folderId);
+  });
+}
+
+function switchToManualSort() {
+  const sortSel = $("#sort");
+  if (sortSel.value !== "manual") sortSel.value = "manual";
+}
+
+async function dropBookmarkNear(draggedId, targetId, before) {
+  const targetBm = allBookmarks.find((x) => x.id === targetId);
+  if (!targetBm) return;
+  const folderId = targetBm.pathIds[targetBm.pathIds.length - 1];
+  const siblings = await chrome.bookmarks.getChildren(folderId);
+  let index = siblings.findIndex((s) => s.id === targetId);
+  if (index === -1) index = siblings.length;
+  if (!before) index += 1;
+  await chrome.bookmarks.move(draggedId, { parentId: folderId, index });
+  toast(t("bookmarkMoved"));
+  switchToManualSort();
+  animateNextRender = true;
+  load();
+}
+
+async function dropBookmarkAtEnd(draggedId, folderId) {
+  const siblings = await chrome.bookmarks.getChildren(folderId);
+  await chrome.bookmarks.move(draggedId, { parentId: folderId, index: siblings.length });
+  toast(t("bookmarkMoved"));
+  switchToManualSort();
+  animateNextRender = true;
+  load();
+}
+
+// ---------- Edición inline ----------
+async function saveBookmarkEdit(b, title, url) {
+  if (!url) {
+    toast(t("invalidUrl"));
+    return;
+  }
+  let finalUrl = url;
+  if (!/^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(finalUrl)) finalUrl = `https://${finalUrl}`;
+  try {
+    new URL(finalUrl);
+  } catch {
+    toast(t("invalidUrl"));
+    return;
+  }
+  const finalTitle = title || domainOf(finalUrl);
+  await chrome.bookmarks.update(b.id, { title: finalTitle, url: finalUrl });
+  toast(t("bookmarkUpdated"));
+  load();
+}
+
+function enterRowEditMode(row, b) {
+  row.draggable = false;
+  row.classList.add("editing");
+  const info = row.querySelector(".info");
+  info.innerHTML = "";
+  const titleInput = document.createElement("input");
+  titleInput.className = "edit-title";
+  titleInput.value = b.title;
+  const urlInput = document.createElement("input");
+  urlInput.className = "edit-url";
+  urlInput.value = b.url;
+  info.append(titleInput, urlInput);
+
+  const actions = row.querySelector(".actions");
+  actions.innerHTML = `
+    <button class="act-save" title="${t("saveEdit")}" aria-label="${t("saveEdit")}">${ICON_CHECK}</button>
+    <button class="act-cancel-edit" title="${t("cancel")}" aria-label="${t("cancel")}">${ICON_CLOSE}</button>
+  `;
+
+  const commit = () => saveBookmarkEdit(b, titleInput.value.trim(), urlInput.value.trim());
+  const cancel = () => render();
+
+  actions.querySelector(".act-save").addEventListener("click", (e) => { e.stopPropagation(); commit(); });
+  actions.querySelector(".act-cancel-edit").addEventListener("click", (e) => { e.stopPropagation(); cancel(); });
+  for (const inp of [titleInput, urlInput]) {
+    inp.addEventListener("click", (e) => e.stopPropagation());
+    inp.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") { e.preventDefault(); commit(); }
+      if (e.key === "Escape") { e.preventDefault(); cancel(); }
+    });
+  }
+  titleInput.focus();
+  titleInput.select();
+}
+
+function enterTileEditMode(wrap, b) {
+  wrap.draggable = false;
+  wrap.classList.add("editing");
+  const tile = wrap.querySelector(".tile");
+  tile.hidden = true;
+
+  const form = document.createElement("div");
+  form.className = "tile-edit-form";
+  const titleInput = document.createElement("input");
+  titleInput.className = "edit-title";
+  titleInput.value = b.title;
+  const urlInput = document.createElement("input");
+  urlInput.className = "edit-url";
+  urlInput.value = b.url;
+  form.append(titleInput, urlInput);
+  wrap.insertBefore(form, tile);
+
+  const actions = wrap.querySelector(".tile-actions");
+  actions.innerHTML = `
+    <button class="act-save" title="${t("saveEdit")}" aria-label="${t("saveEdit")}">${ICON_CHECK}</button>
+    <button class="act-cancel-edit" title="${t("cancel")}" aria-label="${t("cancel")}">${ICON_CLOSE}</button>
+  `;
+
+  const commit = () => saveBookmarkEdit(b, titleInput.value.trim(), urlInput.value.trim());
+  const cancel = () => render();
+
+  actions.querySelector(".act-save").addEventListener("click", (e) => { e.stopPropagation(); commit(); });
+  actions.querySelector(".act-cancel-edit").addEventListener("click", (e) => { e.stopPropagation(); cancel(); });
+  for (const inp of [titleInput, urlInput]) {
+    inp.addEventListener("click", (e) => e.stopPropagation());
+    inp.addEventListener("keydown", (e) => {
+      e.stopPropagation();
+      if (e.key === "Enter") { e.preventDefault(); commit(); }
+      if (e.key === "Escape") { e.preventDefault(); cancel(); }
+    });
+  }
+  titleInput.focus();
+  titleInput.select();
+}
+
 function buildRow(b) {
   const row = document.createElement("div");
   row.className = "bm";
+  row.dataset.id = b.id;
   row.innerHTML = `
-    <div class="favicon-chip"><img class="favicon" loading="lazy" alt="" /></div>
+    <div class="favicon-chip">
+      <input type="checkbox" class="select-box" title="${t("selectBookmark")}" aria-label="${t("selectBookmark")}" />
+      <img class="favicon" loading="lazy" alt="" />
+    </div>
     <div class="info">
       <div class="title"></div>
       <div class="meta">
@@ -360,6 +693,7 @@ function buildRow(b) {
       </div>
     </div>
     <div class="actions">
+      <button class="act-edit" title="${t("editBookmark")}" aria-label="${t("editBookmark")}">${ICON_EDIT}</button>
       <button class="act-copy" title="${t("copyUrl")}" aria-label="${t("copyUrl")}">${ICON_COPY}</button>
       <button class="act-del" title="${t("deleteBookmark")}" aria-label="${t("deleteBookmark")}">${ICON_TRASH}</button>
     </div>
@@ -371,45 +705,86 @@ function buildRow(b) {
   row.querySelector(".date").textContent = relativeDate(b.dateAdded);
   row.title = b.url;
 
+  const checkbox = row.querySelector(".select-box");
+  checkbox.checked = selectedIds.has(b.id);
+  row.classList.toggle("selected", checkbox.checked);
+  checkbox.addEventListener("click", (e) => e.stopPropagation());
+  checkbox.addEventListener("change", () => {
+    setSelected(b.id, checkbox.checked);
+    row.classList.toggle("selected", checkbox.checked);
+  });
+
   row.addEventListener("click", (e) => {
-    if (e.target.closest(".actions")) return;
+    if (e.target.closest(".actions") || e.target.closest(".select-box")) return;
     chrome.tabs.create({ url: b.url, active: !e.ctrlKey && !e.metaKey });
   });
 
-  row.querySelector(".act-copy").addEventListener("click", async () => {
+  row.querySelector(".act-edit").addEventListener("click", (e) => {
+    e.stopPropagation();
+    enterRowEditMode(row, b);
+  });
+
+  row.querySelector(".act-copy").addEventListener("click", async (e) => {
+    e.stopPropagation();
     await navigator.clipboard.writeText(b.url);
     toast(t("urlCopied"));
   });
 
-  row.querySelector(".act-del").addEventListener("click", async () => {
+  row.querySelector(".act-del").addEventListener("click", async (e) => {
+    e.stopPropagation();
     if (!confirm(t("confirmDelete", b.title))) return;
     await chrome.bookmarks.remove(b.id);
     toast(t("bookmarkDeleted"));
     load();
   });
 
+  attachDragSource(row, b);
+
   return row;
 }
 
-function buildTile(b) {
+function buildTile(b, opts = {}) {
   const wrap = document.createElement("div");
-  wrap.className = "tile-wrap";
+  wrap.className = opts.cover ? "tile-wrap cover" : "tile-wrap";
+  wrap.dataset.id = b.id;
+  const badge = opts.cover && isRecentlyAdded(b) ? `<span class="cover-badge">${t("recentlyAdded")}</span>` : "";
   wrap.innerHTML = `
+    ${badge}
     <a class="tile" href="${b.url}" target="_blank" rel="noopener" title="${b.url}">
-      <div class="tile-icon"><img class="favicon" loading="lazy" alt="" /></div>
+      <div class="tile-icon">
+        <input type="checkbox" class="select-box" title="${t("selectBookmark")}" aria-label="${t("selectBookmark")}" />
+        <img class="favicon" loading="lazy" alt="" />
+      </div>
       <div class="tile-title"></div>
     </a>
     <div class="tile-actions">
+      <button class="act-edit" title="${t("editBookmark")}" aria-label="${t("editBookmark")}">${ICON_EDIT}</button>
       <button class="act-copy" title="${t("copyUrl")}" aria-label="${t("copyUrl")}">${ICON_COPY}</button>
       <button class="act-del" title="${t("deleteBookmark")}" aria-label="${t("deleteBookmark")}">${ICON_TRASH}</button>
     </div>
   `;
   wrap.querySelector(".favicon").src = faviconUrl(b.url);
   wrap.querySelector(".tile-title").textContent = b.title;
+  wrap.querySelector(".tile").draggable = false;
+
+  const checkbox = wrap.querySelector(".select-box");
+  checkbox.checked = selectedIds.has(b.id);
+  wrap.classList.toggle("selected", checkbox.checked);
+  checkbox.addEventListener("click", (e) => e.stopPropagation());
+  checkbox.addEventListener("change", () => {
+    setSelected(b.id, checkbox.checked);
+    wrap.classList.toggle("selected", checkbox.checked);
+  });
 
   wrap.querySelector(".tile").addEventListener("click", (e) => {
+    if (e.target.closest(".select-box")) return;
     e.preventDefault();
     chrome.tabs.create({ url: b.url, active: !e.ctrlKey && !e.metaKey });
+  });
+
+  wrap.querySelector(".act-edit").addEventListener("click", (e) => {
+    e.stopPropagation();
+    enterTileEditMode(wrap, b);
   });
 
   wrap.querySelector(".act-copy").addEventListener("click", async (e) => {
@@ -426,46 +801,128 @@ function buildTile(b) {
     load();
   });
 
+  attachDragSource(wrap, b);
+
   return wrap;
+}
+
+function renderKanban(items) {
+  const sections = groupIntoSections(items);
+  const board = document.createElement("div");
+  board.className = "kanban-board";
+
+  for (const section of sections) {
+    const col = document.createElement("div");
+    col.className = "kanban-column";
+
+    const header = document.createElement("div");
+    header.className = "kanban-column-header";
+    header.innerHTML = `<h3></h3><span class="count"></span>`;
+    header.querySelector("h3").textContent = section.title;
+    header.querySelector(".count").textContent = section.items.length;
+    attachOpenAllContextMenu(header, () => section.items);
+    col.appendChild(header);
+
+    const body = document.createElement("div");
+    body.className = "kanban-column-body";
+    for (const b of section.items) body.appendChild(buildRow(b));
+    attachDragContainer(body, section.folderId);
+    col.appendChild(body);
+
+    board.appendChild(col);
+  }
+  listEl.appendChild(board);
+}
+
+// ---------- Animación de reubicación (estilo FLIP) ----------
+let animateNextRender = false;
+
+function prefersReducedMotion() {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+function captureRects(root) {
+  const map = new Map();
+  root.querySelectorAll("[data-id]").forEach((el) => {
+    map.set(el.dataset.id, el.getBoundingClientRect());
+  });
+  return map;
+}
+
+function playFlip(root, oldRects) {
+  root.querySelectorAll("[data-id]").forEach((el) => {
+    const old = oldRects.get(el.dataset.id);
+    if (!old) return;
+    const neu = el.getBoundingClientRect();
+    const dx = old.left - neu.left;
+    const dy = old.top - neu.top;
+    if (!dx && !dy) return;
+    el.style.transition = "none";
+    el.style.transform = `translate(${dx}px, ${dy}px)`;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.transition = "transform 0.32s cubic-bezier(0.22, 1, 0.36, 1)";
+        el.style.transform = "";
+      });
+    });
+    el.addEventListener("transitionend", () => { el.style.transition = ""; }, { once: true });
+  });
 }
 
 function render() {
   const items = getVisible();
   $("#context-count").textContent = t("itemsCount", items.length);
+
+  const shouldAnimate = animateNextRender && !prefersReducedMotion();
+  animateNextRender = false;
+  const oldRects = shouldAnimate ? captureRects(listEl) : null;
+
   listEl.innerHTML = "";
   emptyEl.hidden = items.length > 0;
+  listEl.classList.toggle("has-selection", selectedIds.size > 0);
+  updateBulkBar();
 
-  const sections = groupIntoSections(items);
-  const skipHeader = sections.length === 1 && sections[0].key === GENERAL_KEY;
+  if (viewMode === "kanban") {
+    renderKanban(items);
+  } else {
+    const sections = groupIntoSections(items);
+    const skipHeader = sections.length === 1 && sections[0].key === GENERAL_KEY;
 
-  const frag = document.createDocumentFragment();
-  for (const section of sections) {
-    const sectionEl = document.createElement("div");
-    sectionEl.className = "section";
+    const frag = document.createDocumentFragment();
+    for (const section of sections) {
+      const sectionEl = document.createElement("div");
+      sectionEl.className = "section";
 
-    if (!skipHeader) {
-      const header = document.createElement("div");
-      header.className = "section-header";
-      header.innerHTML = `<h3></h3><span class="count"></span>`;
-      header.querySelector("h3").textContent =
-        section.key === GENERAL_KEY ? t("general") : section.key;
-      header.querySelector(".count").textContent = section.items.length;
-      sectionEl.appendChild(header);
+      if (!skipHeader) {
+        const header = document.createElement("div");
+        header.className = "section-header";
+        header.innerHTML = `<h3></h3><span class="count"></span>`;
+        header.querySelector("h3").textContent = section.title;
+        header.querySelector(".count").textContent = section.items.length;
+        attachOpenAllContextMenu(header, () => section.items);
+        sectionEl.appendChild(header);
+      }
+
+      const list = document.createElement("div");
+      if (viewMode === "grid") {
+        list.className = "tile-grid";
+        for (const b of section.items) list.appendChild(buildTile(b));
+      } else if (viewMode === "cover") {
+        list.className = "cover-grid";
+        for (const b of section.items) list.appendChild(buildTile(b, { cover: true }));
+      } else {
+        list.className = "section-list";
+        for (const b of section.items) list.appendChild(buildRow(b));
+      }
+      attachDragContainer(list, section.folderId);
+      sectionEl.appendChild(list);
+
+      frag.appendChild(sectionEl);
     }
-
-    const list = document.createElement("div");
-    if (viewMode === "grid") {
-      list.className = "tile-grid";
-      for (const b of section.items) list.appendChild(buildTile(b));
-    } else {
-      list.className = "section-list";
-      for (const b of section.items) list.appendChild(buildRow(b));
-    }
-    sectionEl.appendChild(list);
-
-    frag.appendChild(sectionEl);
+    listEl.appendChild(frag);
   }
-  listEl.appendChild(frag);
+
+  if (shouldAnimate) playFlip(listEl, oldRects);
 }
 
 // ---------- Eventos ----------
@@ -480,19 +937,25 @@ $("#toggle-view").addEventListener("click", () => {
   listEl.classList.toggle("compact");
 });
 
+const VIEW_MODES = ["list", "grid", "cover", "kanban"];
+
 function setViewMode(mode) {
   viewMode = mode;
   listEl.classList.toggle("grid-mode", mode === "grid");
-  $("#view-list").classList.toggle("active", mode === "list");
-  $("#view-list").setAttribute("aria-pressed", String(mode === "list"));
-  $("#view-grid").classList.toggle("active", mode === "grid");
-  $("#view-grid").setAttribute("aria-pressed", String(mode === "grid"));
-  $("#toggle-view").disabled = mode === "grid";
+  listEl.classList.toggle("cover-mode", mode === "cover");
+  listEl.classList.toggle("kanban-mode", mode === "kanban");
+  for (const m of VIEW_MODES) {
+    const btn = $(`#view-${m}`);
+    btn.classList.toggle("active", mode === m);
+    btn.setAttribute("aria-pressed", String(mode === m));
+  }
+  $("#toggle-view").disabled = mode !== "list";
   render();
 }
 
-$("#view-list").addEventListener("click", () => setViewMode("list"));
-$("#view-grid").addEventListener("click", () => setViewMode("grid"));
+for (const m of VIEW_MODES) {
+  $(`#view-${m}`).addEventListener("click", () => setViewMode(m));
+}
 
 // ---------- Modal: nuevo favorito ----------
 function buildFolderOptions() {

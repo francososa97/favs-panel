@@ -78,6 +78,7 @@
             <option value="az" data-i18n="sortAz">A → Z</option>
             <option value="za" data-i18n="sortZa">Z → A</option>
             <option value="domain" data-i18n="sortDomain">By domain</option>
+            <option value="manual" data-i18n="sortManual">Manual</option>
           </select>
 
           <div class="view-switch" role="group" data-i18n-aria="viewTypeLabel" aria-label="View type">
@@ -86,6 +87,12 @@
             </button>
             <button id="view-grid" class="view-btn" data-i18n-title="viewGrid" title="Grid view" aria-label="Grid view" aria-pressed="false">
               <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="3" width="6" height="6" rx="1.5"/><rect x="11" y="3" width="6" height="6" rx="1.5"/><rect x="3" y="11" width="6" height="6" rx="1.5"/><rect x="11" y="11" width="6" height="6" rx="1.5"/></svg>
+            </button>
+            <button id="view-cover" class="view-btn" data-i18n-title="viewCover" title="Cover view" aria-label="Cover view" aria-pressed="false">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="3" y="3" width="5.5" height="9" rx="1.3"/><rect x="11.5" y="3" width="5.5" height="9" rx="1.3"/><rect x="3" y="14" width="14" height="3" rx="1.3"/></svg>
+            </button>
+            <button id="view-kanban" class="view-btn" data-i18n-title="viewKanban" title="Kanban view" aria-label="Kanban view" aria-pressed="false">
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><rect x="2.5" y="3" width="4.6" height="14" rx="1.2"/><rect x="8.2" y="3" width="4.6" height="9" rx="1.2"/><rect x="13.9" y="3" width="4.6" height="11" rx="1.2"/></svg>
             </button>
           </div>
 
@@ -115,6 +122,12 @@
   </div>
 
   <div id="toast" class="toast" hidden></div>
+
+  <div id="bulk-bar" class="bulk-bar" hidden>
+    <span id="bulk-count" class="bulk-count"></span>
+    <button id="bulk-cancel" class="btn-secondary" data-i18n="cancel">Cancel</button>
+    <button id="bulk-delete" class="btn-danger" data-i18n="deleteSelectedBtn">Delete selected</button>
+  </div>
 
   <div id="modal-backdrop" class="modal-backdrop" hidden>
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
