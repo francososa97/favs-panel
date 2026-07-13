@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Favs Panel",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Panel detallado para explorar todos tus favoritos: árbol de carpetas, búsqueda y metadata.",
   "permissions": ["bookmarks", "favicon"],
   "background": {
